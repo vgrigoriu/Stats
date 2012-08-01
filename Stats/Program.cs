@@ -6,6 +6,8 @@ using System.Reactive.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Subjects;
 using System.Reactive.Concurrency;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Stats
 {
@@ -23,22 +25,30 @@ namespace Stats
             data.Connect();
         }
 
+        static Task task;
+
         static IConnectableObservable<double> ConsoleToObservable()
         {
-            return Observable.Create<double>(observer =>
+            return Observable.Create<double>(s =>
             {
-                return Scheduler.Immediate.Schedule(self =>
+                var cts = new CancellationTokenSource();
+                task = Task.Factory.StartNew(obj =>
                 {
-                    var currentValue = Console.ReadLine();
-                    double value;
-
-                    if (double.TryParse(currentValue, out value))
+                    var ct = (CancellationToken)obj;
+                    while (true)
                     {
-                        observer.OnNext(value);
-                    }
+                        ct.ThrowIfCancellationRequested();
 
-                    self();
-                });
+                        var input = Console.ReadLine();
+                        double value;
+                        if (double.TryParse(input, out value))
+                        {
+                            s.OnNext(value);
+                        }
+                    }
+                }, cts.Token);
+
+                return () => cts.Cancel();
             }).Publish();
         }
     }
